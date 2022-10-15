@@ -8,22 +8,12 @@ all:
 	@exit 1
 endif
 
-ifeq (,$(wildcard ./gaia/.config))
-.PHONY: all
-all:
-	@echo "Looks like Gaia is not configured."
-	@echo "Run 'make menuconfig' to configure it." 
-	@exit 1
-endif
-
-
 .PHONY: all
 all:
 	$(MAKE) -C gaia
 	$(MAKE) -C srv/olympus
 	cp gaia/build/kernel.elf srv/olympus/build/*.elf boot
 	./scripts/install-limine.sh
-
 
 .PHONY: run
 run:
