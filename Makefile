@@ -1,5 +1,23 @@
-.PHONY: all
 .DEFAULT_GOAL: all
+
+ifeq (,$(wildcard ./limine))
+.PHONY: all
+all:
+	@echo "Looks like limine is not cloned locally. Limine is the recommended bootloader for Nyx."
+	@echo "Run 'make get-limine' to clone the limine binaries."
+	@exit 1
+endif
+
+ifeq (,$(wildcard ./gaia/.config))
+.PHONY: all
+all:
+	@echo "Looks like Gaia is not configured."
+	@echo "Run 'make menuconfig' to configure it." 
+	@exit 1
+endif
+
+
+.PHONY: all
 all:
 	$(MAKE) -C gaia
 	$(MAKE) -C srv/olympus
