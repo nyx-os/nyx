@@ -1,19 +1,19 @@
 .DEFAULT_GOAL: all
+.PHONY: all
 
 ifeq (,$(wildcard ./limine))
-.PHONY: all
 all:
 	@echo "Looks like limine is not cloned locally. Limine is the recommended bootloader for Nyx."
 	@echo "Run 'make get-limine' to clone the limine binaries."
 	@exit 1
-endif
 
-.PHONY: all
+else
 all:
 	$(MAKE) -C gaia
 	$(MAKE) -C srv/olympus
 	cp gaia/build/kernel.elf srv/olympus/build/*.elf boot
 	./scripts/install-limine.sh
+endif
 
 .PHONY: run
 run:
