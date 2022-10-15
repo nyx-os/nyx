@@ -1,0 +1,6 @@
+[submodule "srv/olympus"]
+	path = srv/olympus
+	url = https://github.com/nyx-org/olympus
+[submodule "gaia"]
+	path = gaia
+	url = https://github.com/nyx-org/gaia
