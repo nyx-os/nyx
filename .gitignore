@@ -1,4 +1,6 @@
 *.iso
 *.elf
 limine
-usr/include/*
+*.o
+*.a
+usr/include/*.h
