@@ -4,3 +4,4 @@ limine
 *.o
 *.a
 usr/include/*.h
+usr/include/*/*.h
