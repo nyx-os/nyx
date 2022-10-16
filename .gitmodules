@@ -4,3 +4,6 @@
 [submodule "gaia"]
 	path = gaia
 	url = https://github.com/nyx-org/gaia
+[submodule "chadlibc"]
+	path = chadlibc
+	url = https://github.com/nyx-org/chadlibc
