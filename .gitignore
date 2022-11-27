@@ -1,7 +1,5 @@
 *.iso
 *.elf
-limine
 *.o
 *.a
-usr/include/*.h
-usr/include/*/*.h
+build

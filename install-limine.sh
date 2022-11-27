@@ -1,5 +1,7 @@
 #! /usr/bin/bash
 
+cp -r $(find build -name '*.elf') boot 
+make -C limine
 rm -rf iso_root
 mkdir -p iso_root
 cp -r boot/* \
