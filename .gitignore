@@ -4,4 +4,5 @@
 *.a
 build
 reconfigure
+builddir
 
