@@ -1,0 +1,8 @@
+name=mlibc
+source_method=git
+tag=master
+clone_url="https://github.com/nyx-org/mlibc"
+
+regenerate() {
+    true
+}

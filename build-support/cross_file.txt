@@ -1,0 +1,12 @@
+[binaries]
+c = 'x86_64-nyx-gcc'
+cpp = 'x86_64-nyx-g++'
+ar = 'x86_64-nyx-ar'
+strip = 'x86_64-nyx-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'nyx'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'

@@ -6,3 +6,11 @@ build
 reconfigure
 builddir
 *.tar
+sources
+host-builds
+host-pkgs
+host-sources
+builds
+sysroot
+boot/*
+pkgs
