@@ -3,7 +3,7 @@ c = 'x86_64-nyx-gcc'
 cpp = 'x86_64-nyx-g++'
 ar = 'x86_64-nyx-ar'
 strip = 'x86_64-nyx-strip'
-pkgconfig = 'pkg-config'
+pkgconfig = 'x86_64-nyx-pkg-config'
 
 [host_machine]
 system = 'nyx'

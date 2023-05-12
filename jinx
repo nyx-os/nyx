@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# Copyright (c) 2022, mintsuki
+# Copyright (C) 2022-2023, mintsuki
 
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,7 +25,13 @@
 
 set -e
 
-jinx_version="0.0.20"
+jinx_version="0.0.40"
+
+IFS=" ""	"'
+'
+
+LC_COLLATE=C
+export LC_COLLATE
 
 parallelism="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || psrinfo -tc 2>/dev/null || echo 1)"
 build_dir="$(pwd -P)"
@@ -54,7 +60,11 @@ else
     JINX_CONFIG_FILE_PATH="${base_dir}"/"${JINX_CONFIG_FILE}"
 fi
 
-pacman_cache="$HOME/.cache/jinx/pacman"
+if [ -z "$JINX_CACHE_DIR" ]; then
+    JINX_CACHE_DIR="$build_dir/.jinx-cache"
+fi
+
+pacman_cache="$JINX_CACHE_DIR/pacman"
 
 die() {
     echo "$1"
@@ -65,7 +75,7 @@ temp_collect=""
 trap 'rm -rf $temp_collect; trap - EXIT; exit' EXIT INT TERM QUIT HUP
 
 make_temp() {
-    tmp="$(mktemp $1 "$HOME/.cache/jinx/tmp.XXXXXXXX")"
+    tmp="$(mktemp $1 "$JINX_CACHE_DIR/tmp.XXXXXXXX")"
     temp_collect="${temp_collect} ${tmp}"
 }
 
@@ -141,16 +151,46 @@ get_deps_file() {
     done
 }
 
+run_in_container1() {
+    if ! [ -z "$TERM" ]; then
+        run_in_cont1_term="--env TERM=\"$TERM\""
+    fi
+
+    if ! [ -z "$COLORTERM" ]; then
+        run_in_cont1_colorterm="--env COLORTERM=\"$COLORTERM\""
+    fi
+
+    run_in_cont1_root="$1"
+    shift 1
+
+    "$JINX_CACHE_DIR/rbrt" \
+        --root "$run_in_cont1_root" rw \
+        --uid 0 \
+        --gid 0 \
+        --env HOME=/root \
+        --env LANG=en_US.UTF-8 \
+        --env LC_COLLATE=C \
+        --env PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl \
+        ${run_in_cont1_term} \
+        ${run_in_cont1_colorterm} \
+        --mount "${pacman_cache}":/var/cache/pacman/pkg \
+        -- \
+        "$@"
+}
+
 prepare_container() {
     cd "${build_dir}"
 
     make_temp
+
     hostdeps_file="${tmp}"
+
     make_temp
     deps_file="${tmp}"
 
     build_hostdeps
     build_deps
+
 
     get_hostdeps_file
     get_builddeps_file
@@ -160,33 +200,63 @@ prepare_container() {
     make_temp -d
     sysroot_dir="${tmp}"
 
+
     for hostdep in $(cat "${hostdeps_file}"); do
-        cp -Plrf "${build_dir}"/host-pkgs/${hostdep}/usr/local/. "${container_pkgs}"/
+        cp -Prlf "${build_dir}"/host-pkgs/${hostdep}/usr/local/. "${container_pkgs}"/
     done
 
     for dep in $(cat "${deps_file}"); do
+
         cp -Plrf "${build_dir}"/pkgs/${dep}/. "${sysroot_dir}"/
     done
 
     imagedeps="$(echo "${imagedeps}" | xargs -n1 | sort -u | xargs)"
 
-    pkgset=""
-    for pkg in ${imagedeps}; do
-        pkgset="${pkgset}${pkg}/"
+    while true; do
+        fail_check=""
+        pkgset=""
+        for pkg in ${imagedeps}; do
+            pkgset="${pkgset}${pkg}/"
 
-        if [ -d "$HOME/.cache/jinx/sets/${pkgset}.image" ]; then
-            continue
-        fi
+            if [ -d "$JINX_CACHE_DIR/sets/${pkgset}.image" ]; then
+                continue
+            fi
 
-        mkdir -p "$HOME/.cache/jinx/sets/${pkgset}"
+            mkdir -p "$JINX_CACHE_DIR/sets/${pkgset}"
 
-        cp -Plrf "$HOME/.cache/jinx/sets/${pkgset}../.image" "$HOME/.cache/jinx/sets/${pkgset}.image"
-        "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/${pkgset}.image" rw --uid 0 --gid 0 --mount "${pacman_cache}":/var/cache/pacman/pkg -- pacman --noconfirm -Syu
+            cp -Plrf "$JINX_CACHE_DIR/sets/${pkgset}../.image" "$JINX_CACHE_DIR/sets/${pkgset}.image"
 
-        "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/${pkgset}.image" rw --uid 0 --gid 0 --mount "${pacman_cache}":/var/cache/pacman/pkg -- pacman --needed --noconfirm -S "${pkg}"
+            make_temp
+            pacman_log="${tmp}"
+
+            tail -f "${pacman_log}" &
+            tail_pid=$!
+
+            if ! run_in_container1 "$JINX_CACHE_DIR/sets/${pkgset}.image" pacman --needed --noconfirm -S "${pkg}" >"${pacman_log}" 2>&1; then
+                kill "${tail_pid}"
+                if grep "target not found" "${pacman_log}" >/dev/null 2>&1; then
+                    rm -f "${pacman_log}"
+                    chmod -R 777 "$JINX_CACHE_DIR/sets/${pkgset}"
+                    rm -rf "$JINX_CACHE_DIR/sets/${pkgset}"
+                    die
+                fi
+                rm -f "${pacman_log}"
+                reinit_container
+                fail_check=on
+                break
+            fi
+            kill "${tail_pid}"
+            rm -f "${pacman_log}"
+
+            # Fix permissions of files
+            for f in $(find "$JINX_CACHE_DIR/sets/${pkgset}.image" -perm 000 2>/dev/null); do
+                chmod 755 "$f"
+            done
+        done
+        [ "$fail_check" = "on" ] || break
     done
 
-    imgroot="$HOME/.cache/jinx/sets/${pkgset}.image"
+    imgroot="$JINX_CACHE_DIR/sets/${pkgset}.image"
 }
 
 run_in_container() {
@@ -196,44 +266,45 @@ run_in_container() {
         unshare_net_flag="-n"
     fi
 
-    "$HOME/.cache/jinx/rbrt" \
+    if [ ! -z "$TERM" ]; then
+        run_in_cont_term="--env TERM=\"$TERM\""
+    fi
+
+    if ! [ -z "$COLORTERM" ]; then
+        run_in_cont_colorterm="--env COLORTERM=\"$COLORTERM\""
+    fi
+
+    "$JINX_CACHE_DIR/rbrt" \
         --root "${imgroot}" \
         --uid $(id -u) \
         --gid $(id -g) \
+        --env HOME=/home/$(whoami) \
+        --env LANG=en_US.UTF-8 \
+        --env LC_COLLATE=C \
+        --env PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl \
+        ${run_in_cont_term} \
+        ${run_in_cont_colorterm} \
         --env JINX_CONFIG_FILE="$JINX_CONFIG_FILE" \
-        --mount "${container_pkgs}":/usr/local \
-        --mount "${sysroot_dir}":/sysroot \
-        --mount "${script_dir}":/jinx \
-        --mount "${base_dir}":/base_dir \
+        --env JINX_SOURCE_DIR=/base_dir \
+        --mount "${container_pkgs}":/usr/local:ro \
+        --mount "${sysroot_dir}":/sysroot:ro \
+        --mount "${script}":/jinx:ro \
+        --mount "${base_dir}":/base_dir${container_base_dir_ro} \
+        --mount "${base_dir}"/sources:/base_dir/sources${container_sources_ro} \
         --mount "${build_dir}":/build_dir \
         ${unshare_net_flag} \
+        --workdir /build_dir \
         -- \
-        bash -c "cd /build_dir && JINX_SOURCE_DIR=/base_dir /jinx/${script_name} $1 $2 $3 $4 $5"
+        /jinx "$@"
 }
 
 destroy_container() {
     rm -rf "${container_pkgs}" "${sysroot_dir}"
 }
 
-do_hg_fetch() {
-    [ -d "${source_dir}" ] && return
-    hg clone ${clone_url} "${base_dir}"/sources/${name}
-    ( cd "${base_dir}"/sources/${name} && hg up ${tag} )
-}
+do_fetch() {
+    mkdir -p "${base_dir}"/sources
 
-do_git_fetch() {
-    [ -d "${source_dir}" ] && return
-    if ! [ -z "${commit}" ]; then
-        git clone ${clone_url} --branch=${tag} "${base_dir}"/sources/${name}
-        ( cd "${base_dir}"/sources/${name} && git checkout ${commit} )
-    elif [ "${shallow}" = "no" ]; then
-        git clone ${clone_url} --branch=${tag} "${base_dir}"/sources/${name}
-    else
-        git clone ${clone_url} --branch=${tag} --depth=1 "${base_dir}"/sources/${name}
-    fi
-}
-
-do_tarball_fetch() {
     [ -d "${source_dir}" ] && return
 
     make_temp -d
@@ -245,20 +316,29 @@ do_tarball_fetch() {
     checksum_verified=no
 
     if ! [ -z "${tarball_sha256}" ]; then
-        if ! sha256sum "${tarball_path}" | grep "${tarball_sha256}" >/dev/null 2>&1; then
-            die "* error: Failed to verify SHA256 for ${name}!"
+        actual_sha256="$(sha256sum "${tarball_path}" | awk '{print $1;}')"
+        if ! [ ${actual_sha256} = ${tarball_sha256} ]; then
+            die "* error: Failed to verify SHA256 for ${name}.
+  Expected '${tarball_sha256}';
+  got '${actual_sha256}'."
         fi
         checksum_verified=yes
     fi
     if ! [ -z "${tarball_sha512}" ]; then
-        if ! sha512sum "${tarball_path}" | grep "${tarball_sha512}" >/dev/null 2>&1; then
-            die "* error: Failed to verify SHA512 for ${name}!"
+        actual_sha512="$(sha512sum "${tarball_path}" | awk '{print $1;}')"
+        if ! [ ${actual_sha512} = ${tarball_sha512} ]; then
+            die "* error: Failed to verify SHA512 for ${name}.
+  Expected '${tarball_sha512}';
+  got '${actual_sha512}'."
         fi
         checksum_verified=yes
     fi
     if ! [ -z "${tarball_blake2b}" ]; then
-        if ! b2sum "${tarball_path}" | grep "${tarball_blake2b}" >/dev/null 2>&1; then
-            die "* error: Failed to verify BLAKE2B for ${name}!"
+        actual_blake2b="$(b2sum "${tarball_path}" | awk '{print $1;}')"
+        if ! [ ${actual_blake2b} = ${tarball_blake2b} ]; then
+            die "* error: Failed to verify BLAKE2B for ${name}.
+  Expected '${tarball_blake2b}';
+  got '${actual_blake2b}'."
         fi
         checksum_verified=yes
     fi
@@ -269,7 +349,7 @@ do_tarball_fetch() {
 
     ( cd "${extract_dir}" && tar -xf "${tarball_path}" )
 
-    mv "${extract_dir}"/* "${base_dir}"/sources/${name} || (
+    mv "${extract_dir}"/* "${base_dir}"/sources/${name} >/dev/null 2>&1 || (
         mkdir -p "${base_dir}"/sources/${name}
         mv "${extract_dir}"/* "${base_dir}"/sources/${name}/
     )
@@ -278,33 +358,12 @@ do_tarball_fetch() {
 }
 
 get_real_source_dir() {
-    source_dir="${base_dir}"/"${source_dir}"
-    case ${source_method} in
-        tarball|git|mercurial)
-            source_dir="${base_dir}"/sources/${name}
-            ;;
-        *)
-            is_local_package=true
-            ;;
-    esac
-}
-
-do_fetch() {
-    mkdir -p "${base_dir}"/sources
-
-    case ${source_method} in
-        tarball)
-            do_tarball_fetch
-            ;;
-        git)
-            do_git_fetch
-            ;;
-        mercurial)
-            do_hg_fetch
-            ;;
-        *)
-            ;;
-    esac
+    if [ -z "${source_dir}" ]; then
+        source_dir="${base_dir}"/sources/${name}
+    else
+        source_dir="${base_dir}"/"${source_dir}"
+        is_local_package=true
+    fi
 }
 
 cont_patch() {
@@ -348,7 +407,9 @@ do_regenerate() {
     [ -f "${JINX_CONFIG_FILE_PATH}" ] && . "${JINX_CONFIG_FILE_PATH}"
 
     cd "${source_dir}"
+    [ "${is_local_package}" = true ] || container_base_dir_ro=":ro"
     regenerate
+    container_base_dir_ro=""
     cd "${base_dir}"
 
     touch "${base_dir}"/sources/${name}.regenerated
@@ -579,41 +640,7 @@ do_cmd_regenerate() {
     if ! [ "${is_local_package}" = true ]; then
         cd "${base_dir}"/sources
 
-        # exclude version control dirs
-        make_temp -d
-        vc_dir_clean="${tmp}"
-        rm -rf "${vc_dir_clean}"
-        make_temp -d
-        vc_dir_workdir="${tmp}"
-        rm -rf "${vc_dir_workdir}"
-
-        case "${source_method}" in
-            git)
-                mv $1-clean/.git "${vc_dir_clean}"
-                mv $1-workdir/.git "${vc_dir_workdir}"
-                ;;
-            mercurial)
-                mv $1-clean/.hg "${vc_dir_clean}"
-                mv $1-workdir/.hg "${vc_dir_workdir}"
-                ;;
-            *)
-                ;;
-        esac
-
         git diff --no-index --no-prefix $1-clean $1-workdir >"${patch_file}" || true
-
-        case "${source_method}" in
-            git)
-                mv "${vc_dir_clean}" $1-clean/.git
-                mv "${vc_dir_workdir}" $1-workdir/.git
-                ;;
-            mercurial)
-                mv "${vc_dir_clean}" $1-clean/.hg
-                mv "${vc_dir_workdir}" $1-workdir/.hg
-                ;;
-            *)
-                ;;
-        esac
 
         if [ -s "${patch_file}" ]; then
             mkdir -p "${base_dir}"/patches/$1
@@ -646,9 +673,11 @@ do_host_pkg() {
 
     prepare_container
 
+    container_sources_ro=":ro"
     run_in_container internal-configure-host $1
     run_in_container internal-build-host $1
     run_in_container internal-install-host $1
+    unset container_sources_ro
 
     destroy_container
 }
@@ -661,14 +690,18 @@ do_pkg() {
     echo "* building package: $name"
 
     eval $(grep 'from_source=' < "${base_dir}"/recipes/$1)
+
     [ -f "${base_dir}"/sources/${from_source}.regenerated ] || \
         "${script}" internal-source "${from_source}"
 
+
     prepare_container
 
+    container_sources_ro=":ro"
     run_in_container internal-configure $1
     run_in_container internal-build $1
     run_in_container internal-install $1
+    unset container_sources_ro
 
     destroy_container
 }
@@ -756,13 +789,8 @@ cmd_install() {
     done
 }
 
-first_use() {
-    echo "* preparing jinx for first use..."
-    mkdir -p "$HOME/.cache/jinx"
-
-    mkdir -p "${pacman_cache}"
-
-    cat <<'EOF' >"$HOME/.cache/jinx/rbrt.c"
+rebuild_rbrt() {
+    cat <<'EOF' >"$JINX_CACHE_DIR/rbrt.c"
 // Written by czapek1337 (czapek1337@gmail.com)
 // Inspired heavily by https://github.com/managarm/cbuildrt/
 
@@ -810,8 +838,13 @@ int main(int argc, char *argv[]) {
     int uid_map_fd = -1;
     int gid_map_fd = -1;
 
+    char *workdir = "/";
+
     for (int i = 1; i < argc; ) {
-        if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--root") == 0) {
+        if (strcmp(argv[i], "--workdir") == 0) {
+            workdir = argv[i + 1];
+            i += 2;
+        } else if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--root") == 0) {
             if (i == argc - 1) {
                 fprintf(stderr, "%s: '%s' requires a value\n", argv[0], argv[i]);
                 goto cleanup;
@@ -998,23 +1031,7 @@ int main(int argc, char *argv[]) {
             goto errno_error;
         }
 
-        char *dev_overlays[] = { "tty", "null", "zero", "full", "random", "urandom" };
         char target_path[PATH_MAX];
-
-        for (size_t i = 0; i < sizeof(dev_overlays) / sizeof(char *); i++) {
-            char source_path[PATH_MAX];
-
-            snprintf(source_path, PATH_MAX, "/dev/%s", dev_overlays[i]);
-            snprintf(target_path, PATH_MAX, "%s/dev/%s", rootfs, dev_overlays[i]);
-
-            if (mount(source_path, target_path, NULL, MS_BIND, NULL) < 0) {
-                int tmp_errno = errno;
-                fprintf(stderr, "(source: %s, target: %s) ", source_path, target_path);
-                errno = tmp_errno;
-                err_msg = "mount() failure at line " TOSTRING(__LINE__);
-                goto errno_error;
-            }
-        }
 
         snprintf(target_path, PATH_MAX, "%s/etc/resolv.conf", rootfs);
         if (mount("/etc/resolv.conf", target_path, NULL, MS_BIND, NULL) < 0) {
@@ -1022,14 +1039,14 @@ int main(int argc, char *argv[]) {
             goto errno_error;
         }
 
-        snprintf(target_path, PATH_MAX, "%s/dev/pts", rootfs);
-        if (mount(NULL, target_path, "devpts", 0, NULL) < 0) {
+        snprintf(target_path, PATH_MAX, "%s/dev", rootfs);
+        if (mount("/dev", target_path, NULL, MS_REC | MS_BIND | MS_SLAVE, NULL) < 0) {
             err_msg = "mount() failure at line " TOSTRING(__LINE__);
             goto errno_error;
         }
 
-        snprintf(target_path, PATH_MAX, "%s/dev/shm", rootfs);
-        if (mount(NULL, target_path, "tmpfs",  0, NULL) < 0) {
+        snprintf(target_path, PATH_MAX, "%s/sys", rootfs);
+        if (mount("/sys", target_path, NULL, MS_REC | MS_BIND | MS_SLAVE, NULL) < 0) {
             err_msg = "mount() failure at line " TOSTRING(__LINE__);
             goto errno_error;
         }
@@ -1062,10 +1079,28 @@ int main(int argc, char *argv[]) {
 
             *target++ = 0;
 
-            snprintf(target_path, PATH_MAX, "%s/%s", rootfs, target);
-            if (mount(source, target_path, NULL, MS_BIND | MS_REC, NULL) < 0) {
+            char *read_only = target;
+
+            while (*read_only && *read_only != ':') {
+                read_only++;
+            }
+
+            bool ro = false;
+            if (*read_only == ':') {
+                *read_only++ = 0;
+                ro = strcmp(read_only, "ro") == 0;
+            }
+
+            snprintf(target_path, PATH_MAX, "%s%s", rootfs, target);
+            if (mount(source, target_path, NULL, MS_BIND | (ro ? MS_RDONLY : 0), NULL) < 0) {
                 err_msg = "mount() failure at line " TOSTRING(__LINE__);
                 goto errno_error;
+            }
+            if (ro) {
+                if (mount(source, target_path, NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) < 0) {
+                    err_msg = "mount() failure at line " TOSTRING(__LINE__);
+                    goto errno_error;
+                }
             }
         }
 
@@ -1079,14 +1114,18 @@ int main(int argc, char *argv[]) {
             goto errno_error;
         }
 
-        if (chdir("/") < 0) {
+        if (chdir(workdir) < 0) {
             err_msg = "chdir() failure at line " TOSTRING(__LINE__);
             goto errno_error;
         }
 
         int child = fork();
         if (child == 0) {
-            setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl", 1);
+            clearenv();
+
+            setenv("HOME", "/root", 1);
+            setenv("LANG", "C", 1);
+            setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 1);
 
             for (int i = 0; i < env_count; i++) {
                 char *key = envs[i];
@@ -1152,54 +1191,87 @@ cleanup:
     return ok;
 }
 EOF
-    cc -O2 -pipe -Wall -Wextra "$HOME/.cache/jinx/rbrt.c" -o "$HOME/.cache/jinx/rbrt"
+    cc -O2 -pipe -Wall -Wextra "$JINX_CACHE_DIR/rbrt.c" -o "$JINX_CACHE_DIR/rbrt"
+}
 
-    curl -L -o "$HOME/.cache/jinx/arch-root.tar.gz" https://mirror.netcologne.de/archlinux/iso/latest/archlinux-bootstrap-x86_64.tar.gz
-    ( cd "$HOME/.cache/jinx" && bsdtar -zxf arch-root.tar.gz )
-    mkdir -p "$HOME/.cache/jinx/sets"
-    mv "$HOME/.cache/jinx/root.x86_64" "$HOME/.cache/jinx/sets/.image"
+reinit_container() {
+    chmod -R 777 "$JINX_CACHE_DIR/sets" 2>/dev/null || true
+    chmod -R 777 "$JINX_CACHE_DIR/pacman" 2>/dev/null || true
+    rm -rf "$JINX_CACHE_DIR/arch-root.tar.gz" "$JINX_CACHE_DIR/sets" "$JINX_CACHE_DIR/pacman"
 
-    ln -s /proc/self/fd/0 "$HOME/.cache/jinx/sets/.image/dev/stdin"
-    ln -s /proc/self/fd/1 "$HOME/.cache/jinx/sets/.image/dev/stdout"
-    ln -s /proc/self/fd/2 "$HOME/.cache/jinx/sets/.image/dev/stderr"
-    ln -s /proc/self/fd "$HOME/.cache/jinx/sets/.image/dev/fd"
-    touch "$HOME/.cache/jinx/sets/.image/dev/full"
-    touch "$HOME/.cache/jinx/sets/.image/dev/null"
-    touch "$HOME/.cache/jinx/sets/.image/dev/zero"
-    touch "$HOME/.cache/jinx/sets/.image/dev/tty"
-    touch "$HOME/.cache/jinx/sets/.image/dev/random"
-    touch "$HOME/.cache/jinx/sets/.image/dev/urandom"
-    mkdir "$HOME/.cache/jinx/sets/.image/dev/pts"
-    mkdir "$HOME/.cache/jinx/sets/.image/dev/shm"
-    echo 'Server = https://mirror.netcologne.de/archlinux/$repo/os/$arch' > "$HOME/.cache/jinx/sets/.image/etc/pacman.d/mirrorlist"
-    echo 'en_US.UTF-8 UTF-8' > "$HOME/.cache/jinx/sets/.image/etc/locale.gen"
-    mkdir "$HOME/.cache/jinx/sets/.image/etc/pacman.d/gnupg"
-    mkdir "$HOME/.cache/jinx/sets/.image/sysroot"
-    mkdir "$HOME/.cache/jinx/sets/.image/base_dir"
-    mkdir "$HOME/.cache/jinx/sets/.image/build_dir"
-    mkdir "$HOME/.cache/jinx/sets/.image/jinx"
-    "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/.image" rw --uid 0 --gid 0 -- locale-gen
-    "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/.image" rw --uid 0 --gid 0 --mount "${pacman_cache}":/var/cache/pacman/pkg -- pacman-key --init
-    "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/.image" rw --uid 0 --gid 0 --mount "${pacman_cache}":/var/cache/pacman/pkg -- pacman-key --populate archlinux
-    "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/.image" rw --uid 0 --gid 0 --mount "${pacman_cache}":/var/cache/pacman/pkg -- pacman --noconfirm -Sy archlinux-keyring
-    "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/.image" rw --uid 0 --gid 0 --mount "${pacman_cache}":/var/cache/pacman/pkg -- pacman --noconfirm -Syu
-    "$HOME/.cache/jinx/rbrt" --root "$HOME/.cache/jinx/sets/.image" rw --uid 0 --gid 0 --mount "${pacman_cache}":/var/cache/pacman/pkg -- pacman --needed --noconfirm -S bison diffutils flex gettext inetutils libtool m4 make patch perl texinfo which
+    mkdir -p "${pacman_cache}"
 
-    echo "$jinx_version" > "$HOME/.cache/jinx/version"
+    curl -L -o "$JINX_CACHE_DIR/arch-root.tar.gz" https://mirror.netcologne.de/archlinux/iso/latest/archlinux-bootstrap-x86_64.tar.gz
+    ( cd "$JINX_CACHE_DIR" && bsdtar -zxf arch-root.tar.gz )
+    mkdir -p "$JINX_CACHE_DIR/sets"
+    mv "$JINX_CACHE_DIR/root.x86_64" "$JINX_CACHE_DIR/sets/.image"
+
+    echo 'Server = https://mirror.netcologne.de/archlinux/$repo/os/$arch' > "$JINX_CACHE_DIR/sets/.image/etc/pacman.d/mirrorlist"
+    echo 'en_US.UTF-8 UTF-8' > "$JINX_CACHE_DIR/sets/.image/etc/locale.gen"
+    mkdir "$JINX_CACHE_DIR/sets/.image/etc/pacman.d/gnupg"
+    mkdir "$JINX_CACHE_DIR/sets/.image/sysroot"
+    mkdir "$JINX_CACHE_DIR/sets/.image/base_dir"
+    mkdir "$JINX_CACHE_DIR/sets/.image/build_dir"
+    touch "$JINX_CACHE_DIR/sets/.image/jinx"
+    chmod +x "$JINX_CACHE_DIR/sets/.image/jinx"
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" locale-gen
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" pacman-key --init
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" pacman-key --populate archlinux
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" pacman --noconfirm -Sy archlinux-keyring
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" pacman --noconfirm -Syu
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" pacman --needed --noconfirm -S reflector
+    echo "* updating Arch mirrors..."
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" reflector --latest 6 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" pacman --noconfirm -Syu
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" pacman --needed --noconfirm -S bison diffutils flex gettext inetutils libtool m4 make patch perl python texinfo which
+
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" groupadd --gid $(id -g) $(whoami)
+    run_in_container1 "$JINX_CACHE_DIR/sets/.image" useradd -m --uid $(id -u) --gid $(id -g) $(whoami)
+
+    # Fix permissions of files
+    for f in $(find "$JINX_CACHE_DIR/sets/.image" -perm 000 2>/dev/null); do
+        chmod 755 "$f"
+    done
+}
+
+first_use() {
+    echo "* preparing Jinx for first use..."
+
+    mkdir -p "$JINX_CACHE_DIR"
+
+    rebuild_rbrt
+
+    reinit_container
+
+    echo "$jinx_version" > "$JINX_CACHE_DIR/version"
 
     echo "* done"
 }
 
-if ! [ -d "/jinx" ]; then
-    if ! [ -d "$HOME/.cache/jinx" ]; then
-        first_use
-    fi
+redo_first_use() {
+    echo "* purging Jinx cache..."
+    chmod -R 777 "$JINX_CACHE_DIR" || true
+    rm -rf "$JINX_CACHE_DIR"
+    first_use
+}
 
-    if ! [ -f "$HOME/.cache/jinx/version" ] || ! [ "$(cat "$HOME/.cache/jinx/version")" = "$jinx_version" ]; then
-        chmod -R 777 "$HOME/.cache/jinx" || true
-        rm -rf "$HOME/.cache/jinx"
-        first_use
-    fi
+case "$1" in
+    version|--version)
+        echo "Jinx version $jinx_version"
+        exit 0
+        ;;
+esac
+
+if ! [ -f "$JINX_CONFIG_FILE_PATH" ]; then
+    die "$0: missing Jinx config file in source directory $base_dir"
+fi
+
+if ! [ -d "$JINX_CACHE_DIR" ]; then
+    first_use
+fi
+
+if ! [ -f "$JINX_CACHE_DIR/version" ] || ! [ "$(cat "$JINX_CACHE_DIR/version")" = "$jinx_version" ]; then
+    redo_first_use
 fi
 
 case "$1" in
@@ -1291,7 +1363,14 @@ case "$1" in
     clean)
         cmd_clean
         ;;
+    rbrt)
+        rebuild_rbrt
+        ;;
     *)
-        die "unknown command: $1"
+        if [ -z "$1" ]; then
+            die "$0: no command specified."
+        else
+            die "$0: unknown command: $1"
+        fi
         ;;
 esac

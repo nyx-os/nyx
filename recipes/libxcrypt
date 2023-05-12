@@ -2,12 +2,14 @@ name=libxcrypt
 from_source=libxcrypt
 revision=1
 hostdeps="gcc automake autoconf libtool pkg-config"
-deps="mlibc-base"
+deps="mlibc libgcc libstdc++"
 
 configure() {
     ${source_dir}/configure \
         --host=x86_64-nyx \
         --prefix=${prefix} \
+        --sysconfdir=/etc \
+        --localstatedir=/var \
         --enable-obsolete-api=yes \
         --disable-xcrypt-compat-files \
         --disable-static

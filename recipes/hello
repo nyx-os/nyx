@@ -2,11 +2,11 @@ name=hello
 from_source=hello
 revision=1
 hostdeps="gcc autoconf automake libtool pkg-config"
-deps="mlibc-base"
+deps="mlibc core-libs"
 imagedeps="binutils"
 
 configure() {
-    ${source_dir}/configure           \
+    LIBS="-liconv" ${source_dir}/configure           \
         --host=x86_64-nyx           \
         --prefix=${prefix}            \
         --disable-static              \

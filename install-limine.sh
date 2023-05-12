@@ -1,4 +1,4 @@
-#! /usr/bin/bash
+#!/bin/sh
 
 cp -r $(find build -name '*.elf') boot/boot
 make -C limine

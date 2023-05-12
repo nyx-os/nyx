@@ -11,6 +11,7 @@ configure() {
 
 build() {
     cd "${base_dir}"/host-builds/gcc/build
+
     make -j${parallelism} all-target-libstdc++-v3
 }
 
@@ -26,7 +27,6 @@ install() {
 
     cp -r tmp_libstdc++_dir/usr/local/share "${dest_dir}${prefix}"/
     cp -r tmp_libstdc++_dir/usr/local/x86_64-nyx/* "${dest_dir}${prefix}"/
-
     # Remove static libraries
     rm -rf "${dest_dir}${prefix}"/lib/*.a
 
