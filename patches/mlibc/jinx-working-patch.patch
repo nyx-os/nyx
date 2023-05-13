@@ -63,10 +63,10 @@ index 0000000..79e300c
 +}
 diff --git mlibc-workdir/sysdeps/nyx/generic/generic.cpp mlibc-workdir/sysdeps/nyx/generic/generic.cpp
 new file mode 100644
-index 0000000..e202cb3
+index 0000000..7b5b444
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/generic/generic.cpp
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,181 @@
 +#include <abi-bits/fcntl.h>
 +#include <asm/ioctls.h>
 +#include <bits/ensure.h>
@@ -158,6 +158,12 @@ index 0000000..e202cb3
 +int sys_getegid(void) { return 0; }
 +int sys_getuid(void) { return 0; }
 +int sys_getgid(void) { return 0; }
++int sys_setpgid(pid_t pid, pid_t pgid) {
++  (void)pid;
++  (void)pgid;
++  mlibc::infoLogger() << "setpgid() is a stub" << frg::endlog;
++  return 0;
++}
 +
 +int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags,
 +             struct stat *statbuf) {
