@@ -1,3 +1,3 @@
 project('nyx', version: 'v0.0.1-poc')
 
-subproject('olympus')
+subproject('gaia')

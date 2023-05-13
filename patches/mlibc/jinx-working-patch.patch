@@ -63,10 +63,10 @@ index 0000000..79e300c
 +}
 diff --git mlibc-workdir/sysdeps/nyx/generic/generic.cpp mlibc-workdir/sysdeps/nyx/generic/generic.cpp
 new file mode 100644
-index 0000000..6257041
+index 0000000..e202cb3
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/generic/generic.cpp
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,175 @@
 +#include <abi-bits/fcntl.h>
 +#include <asm/ioctls.h>
 +#include <bits/ensure.h>
@@ -82,6 +82,7 @@ index 0000000..6257041
 +#include <nyx/syscall.h>
 +#include <stdint.h>
 +#include <stdlib.h>
++#include <string.h>
 +
 +#define STRINGIFY_(X) #X
 +#define STRINGIFY(X) STRINGIFY_(X)
@@ -122,9 +123,71 @@ index 0000000..6257041
 +  return 0;
 +}
 +
++int sys_gethostname(char *buffer, size_t bufsize) {
++  memcpy(buffer, "nyx", 3);
++  return 0;
++}
++
++int sys_getpid() { return __syscall0(SYS_GETPID); }
++int sys_getppid() { return 0; }
++
++pid_t sys_getpgid(pid_t pid, pid_t *pgid) {
++  (void)pid;
++  mlibc::infoLogger() << "getpgid() is a stub" << frg::endlog;
++  *pgid = 0;
++  return 0;
++}
++
++int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
++  (void)fd;
++  (void)request;
++  (void)arg;
++  (void)result;
++  *result = 0;
++  mlibc::infoLogger() << "ioctl() is a stub" << frg::endlog;
++  return 0;
++}
++
++int sys_getpuid() { return 0; }
++
 +int sys_close(int fd) { return __syscall1(SYS_CLOSE, fd); }
 +
 +int sys_vm_unmap(void *pointer, size_t size) STUB_ONLY;
++
++int sys_geteuid(void) { return 0; }
++int sys_getegid(void) { return 0; }
++int sys_getuid(void) { return 0; }
++int sys_getgid(void) { return 0; }
++
++int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags,
++             struct stat *statbuf) {
++  if (fsfdt == fsfd_target::path)
++    fd = AT_FDCWD;
++  else if (fsfdt == fsfd_target::fd)
++    flags |= AT_EMPTY_PATH;
++  else
++    __ensure(fsfdt == fsfd_target::fd_path);
++
++  return __syscall4(SYS_STAT, fd, (uintptr_t)path, flags, (uintptr_t)statbuf);
++}
++
++int sys_sigaction(int signum, const struct sigaction *act,
++                  struct sigaction *oldact) {
++  (void)signum;
++  (void)act;
++  (void)oldact;
++  mlibc::infoLogger() << "sigaction() is a stub" << frg::endlog;
++  return 0;
++}
++
++int sys_sigprocmask(int how, const sigset_t *__restrict set,
++                    sigset_t *__restrict retrieve) {
++  (void)how;
++  (void)set;
++  (void)retrieve;
++  mlibc::infoLogger() << "sigprocmask() is a stub!" << frg::endlog;
++  return ENOSYS;
++}
 +
 +int sys_isatty(int fd) {
 +  if (fd < 3)
@@ -170,7 +233,13 @@ index 0000000..6257041
 +
 +int sys_futex_wait(int *pointer, int expected, timespec const *time) STUB_ONLY;
 +int sys_futex_wake(int *pointer) STUB_ONLY;
-+int sys_clock_get(int clock, time_t *secs, long *nanos) STUB_ONLY;
++int sys_clock_get(int clock, time_t *secs, long *nanos) {
++  (void)clock;
++  (void)secs;
++  (void)nanos;
++  mlibc::infoLogger() << "clock_get() is a stub" << frg::endlog;
++  return 0;
++}
 +
 +} // namespace mlibc
 diff --git mlibc-workdir/sysdeps/nyx/include/abi-bits/access.h mlibc-workdir/sysdeps/nyx/include/abi-bits/access.h
@@ -511,10 +580,10 @@ index 0000000..66412d7
 \ No newline at end of file
 diff --git mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
 new file mode 100644
-index 0000000..0918b86
+index 0000000..e1a0608
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,79 @@
 +#ifndef _NYX__SYSCALL_H
 +#define _NYX__SYSCALL_H
 +
@@ -531,6 +600,7 @@ index 0000000..0918b86
 +  SYS_MMAP,
 +  SYS_EXIT,
 +  SYS_TCB_SET,
++  SYS_GETPID,
 +};
 +
 +static inline uintptr_t __syscall0(long sc) {
