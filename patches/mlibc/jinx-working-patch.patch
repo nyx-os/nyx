@@ -63,10 +63,10 @@ index 0000000..79e300c
 +}
 diff --git mlibc-workdir/sysdeps/nyx/generic/generic.cpp mlibc-workdir/sysdeps/nyx/generic/generic.cpp
 new file mode 100644
-index 0000000..7b5b444
+index 0000000..a04585f
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/generic/generic.cpp
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,191 @@
 +#include <abi-bits/fcntl.h>
 +#include <asm/ioctls.h>
 +#include <bits/ensure.h>
@@ -129,13 +129,23 @@ index 0000000..7b5b444
 +}
 +
 +int sys_getpid() { return __syscall0(SYS_GETPID); }
-+int sys_getppid() { return 0; }
++int sys_getppid() { return __syscall0(SYS_GETPPID); }
++
++int sys_fork(int *pid) {
++  *pid = __syscall0(SYS_FORK);
++  return 0;
++}
 +
 +pid_t sys_getpgid(pid_t pid, pid_t *pgid) {
 +  (void)pid;
 +  mlibc::infoLogger() << "getpgid() is a stub" << frg::endlog;
 +  *pgid = 0;
 +  return 0;
++}
++
++int sys_execve(const char *path, char *const argv[], char *const envp[]) {
++  return __syscall3(SYS_EXEC, (uintptr_t)path, (uintptr_t)argv,
++                    (uintptr_t)envp);
 +}
 +
 +int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
@@ -586,10 +596,10 @@ index 0000000..66412d7
 \ No newline at end of file
 diff --git mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
 new file mode 100644
-index 0000000..e1a0608
+index 0000000..a6b0ffc
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,82 @@
 +#ifndef _NYX__SYSCALL_H
 +#define _NYX__SYSCALL_H
 +
@@ -607,6 +617,9 @@ index 0000000..e1a0608
 +  SYS_EXIT,
 +  SYS_TCB_SET,
 +  SYS_GETPID,
++  SYS_GETPPID,
++  SYS_FORK,
++  SYS_EXEC,
 +};
 +
 +static inline uintptr_t __syscall0(long sc) {
