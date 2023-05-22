@@ -13,7 +13,7 @@ configure() {
         --localstatedir=/var \
         --without-bash-malloc  \
         --disable-nls \
-        --with-installed-readline="${sysroot}"/usr/lib
+        --disable-readline
 }
 
 build() {

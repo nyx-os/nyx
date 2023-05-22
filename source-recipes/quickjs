@@ -1,0 +1,8 @@
+name=quickjs
+commit="b5e62895c619d4ffc75c9d822c8d85f1ece77e5b"
+tarball_url="https://github.com/bellard/quickjs/archive/${commit}.tar.gz"
+tarball_blake2b="374c0c95b17a86deec21463f270fc7ff11f08ff24feb30ae666f9e064fb4585e7c71cd777841336c08ec268e923ab8bbea465696741aca03be80480609921149"
+
+regenerate() {
+    true
+}

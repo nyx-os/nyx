@@ -1,0 +1,19 @@
+name=quickjs
+from_source=quickjs
+revision=1
+hostdeps="gcc autoconf automake libtool pkg-config"
+deps="core-libs"
+imagedeps="gcc"
+
+configure() {
+    cp -r ${source_dir}/. ./
+}
+
+build() {
+    make -j${parallelism} CROSS_PREFIX=x86_64-nyx-
+}
+
+install() {
+    mkdir -p "${dest_dir}/usr/bin"
+    cp ./qjs "${dest_dir}/usr/bin"
+}

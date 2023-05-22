@@ -8,6 +8,10 @@ int main(void) {
 
   char *shell = getenv("SHELL");
 
+  setenv("TERM", "linux", 1);
+  setenv("USER", "root", 1);
+  setenv("PATH", "/usr/local/bin:/usr/bin", 1);
+
   if (!shell) {
     return EXIT_FAILURE;
   }

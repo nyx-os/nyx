@@ -1,0 +1,34 @@
+diff --git lua-clean/Makefile lua-workdir/Makefile
+index 8efa2eb..2fa286c 100644
+--- lua-clean/Makefile
++++ lua-workdir/Makefile
+@@ -10,7 +10,7 @@ PLAT= guess
+ # so take care if INSTALL_TOP is not an absolute path. See the local target.
+ # You may want to make INSTALL_LMOD and INSTALL_CMOD consistent with
+ # LUA_ROOT, LUA_LDIR, and LUA_CDIR in luaconf.h.
+-INSTALL_TOP= /usr/local
++INSTALL_TOP= $(DESTDIR)/usr/local
+ INSTALL_BIN= $(INSTALL_TOP)/bin
+ INSTALL_INC= $(INSTALL_TOP)/include
+ INSTALL_LIB= $(INSTALL_TOP)/lib
+diff --git lua-clean/src/Makefile lua-workdir/src/Makefile
+index b771196..b1cf0d0 100644
+--- lua-clean/src/Makefile
++++ lua-workdir/src/Makefile
+@@ -6,13 +6,13 @@
+ # Your platform. See PLATS for possible values.
+ PLAT= guess
+ 
+-CC= gcc -std=gnu99
++CC=x86_64-nyx-gcc -std=gnu99
+ CFLAGS= -O2 -Wall -Wextra -DLUA_COMPAT_5_3 $(SYSCFLAGS) $(MYCFLAGS)
+ LDFLAGS= $(SYSLDFLAGS) $(MYLDFLAGS)
+ LIBS= -lm $(SYSLIBS) $(MYLIBS)
+ 
+-AR= ar rcu
+-RANLIB= ranlib
++AR=x86_64-nyx-ar rcu
++RANLIB=x86_64-nyx-ranlib
+ RM= rm -f
+ UNAME= uname
+ 

@@ -63,10 +63,10 @@ index 0000000..79e300c
 +}
 diff --git mlibc-workdir/sysdeps/nyx/generic/generic.cpp mlibc-workdir/sysdeps/nyx/generic/generic.cpp
 new file mode 100644
-index 0000000..a04585f
+index 0000000..c6b838b
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/generic/generic.cpp
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,239 @@
 +#include <abi-bits/fcntl.h>
 +#include <asm/ioctls.h>
 +#include <bits/ensure.h>
@@ -148,6 +148,28 @@ index 0000000..a04585f
 +                    (uintptr_t)envp);
 +}
 +
++int sys_read_entries(int fd, void *buffer, size_t max_size,
++                     size_t *bytes_read) {
++  uintptr_t r = __syscall4(SYS_READDIR, fd, (uintptr_t)buffer, max_size,
++                           (uintptr_t)bytes_read);
++  return r;
++}
++
++int sys_waitpid(pid_t pid, int *status, int flags, struct rusage *ru,
++                pid_t *ret_pid) {
++  (void)pid;
++  (void)status;
++  (void)flags;
++  (void)ru;
++  (void)ret_pid;
++
++  return __syscall2(SYS_WAITPID, pid, (uintptr_t)status);
++}
++
++int sys_open_dir(const char *path, int *handle) {
++  return sys_open(path, O_DIRECTORY, 0, handle);
++}
++
 +int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
 +  (void)fd;
 +  (void)request;
@@ -184,7 +206,26 @@ index 0000000..a04585f
 +  else
 +    __ensure(fsfdt == fsfd_target::fd_path);
 +
-+  return __syscall4(SYS_STAT, fd, (uintptr_t)path, flags, (uintptr_t)statbuf);
++  int r = __syscall4(SYS_STAT, fd, (uintptr_t)path, flags, (uintptr_t)statbuf);
++
++  mlibc::infoLogger() << "ee:"
++                      << frg::hex_fmt((statbuf->st_mode & S_IFMT) == S_IFDIR)
++                      << "  " << statbuf->st_dev << frg::endlog;
++  return r;
++}
++
++int sys_faccessat(int dirfd, const char *pathname, int mode, int flags) {
++  (void)flags;
++  struct stat buf;
++  if (int r = sys_stat(fsfd_target::fd_path, dirfd, pathname,
++                       mode & AT_SYMLINK_FOLLOW, &buf)) {
++    return r;
++  }
++  return 0;
++}
++
++int sys_access(const char *path, int mode) {
++  return sys_faccessat(AT_FDCWD, path, mode, 0);
 +}
 +
 +int sys_sigaction(int signum, const struct sigaction *act,
@@ -206,9 +247,8 @@ index 0000000..a04585f
 +}
 +
 +int sys_isatty(int fd) {
-+  if (fd < 3)
-+    return 0;
-+  return ENOTTY;
++  (void)fd;
++  return 0;
 +}
 +
 +int sys_vm_map(void *hint, size_t size, int prot, int flags, int fd,
@@ -231,10 +271,18 @@ index 0000000..a04585f
 +                    pointer);
 +}
 +
-+int sys_anon_free(void *pointer, size_t size) STUB_ONLY;
++int sys_anon_free(void *pointer, size_t size) {
++  mlibc::infoLogger() << "sys_anon_free is a stub" << frg::endlog;
++  return 0;
++}
 +
 +int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read) {
-+  *bytes_read = __syscall3(SYS_READ, fd, (uintptr_t)buf, count);
++  uintptr_t ret = __syscall3(SYS_READ, fd, (uintptr_t)buf, count);
++
++  if ((int)ret < 0)
++    return ret;
++
++  *bytes_read = ret;
 +  return 0;
 +}
 +
@@ -596,10 +644,10 @@ index 0000000..66412d7
 \ No newline at end of file
 diff --git mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
 new file mode 100644
-index 0000000..a6b0ffc
+index 0000000..69b64ed
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,84 @@
 +#ifndef _NYX__SYSCALL_H
 +#define _NYX__SYSCALL_H
 +
@@ -620,6 +668,8 @@ index 0000000..a6b0ffc
 +  SYS_GETPPID,
 +  SYS_FORK,
 +  SYS_EXEC,
++  SYS_READDIR,
++  SYS_WAITPID,
 +};
 +
 +static inline uintptr_t __syscall0(long sc) {
