@@ -63,10 +63,10 @@ index 0000000..79e300c
 +}
 diff --git mlibc-workdir/sysdeps/nyx/generic/generic.cpp mlibc-workdir/sysdeps/nyx/generic/generic.cpp
 new file mode 100644
-index 0000000..c6b838b
+index 0000000..5e6a346
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/generic/generic.cpp
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,272 @@
 +#include <abi-bits/fcntl.h>
 +#include <asm/ioctls.h>
 +#include <bits/ensure.h>
@@ -170,16 +170,6 @@ index 0000000..c6b838b
 +  return sys_open(path, O_DIRECTORY, 0, handle);
 +}
 +
-+int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
-+  (void)fd;
-+  (void)request;
-+  (void)arg;
-+  (void)result;
-+  *result = 0;
-+  mlibc::infoLogger() << "ioctl() is a stub" << frg::endlog;
-+  return 0;
-+}
-+
 +int sys_getpuid() { return 0; }
 +
 +int sys_close(int fd) { return __syscall1(SYS_CLOSE, fd); }
@@ -208,9 +198,6 @@ index 0000000..c6b838b
 +
 +  int r = __syscall4(SYS_STAT, fd, (uintptr_t)path, flags, (uintptr_t)statbuf);
 +
-+  mlibc::infoLogger() << "ee:"
-+                      << frg::hex_fmt((statbuf->st_mode & S_IFMT) == S_IFDIR)
-+                      << "  " << statbuf->st_dev << frg::endlog;
 +  return r;
 +}
 +
@@ -276,6 +263,47 @@ index 0000000..c6b838b
 +  return 0;
 +}
 +
++int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
++  uintptr_t ret = __syscall3(SYS_IOCTL, fd, request, (uintptr_t)arg);
++
++  if ((int)ret < 0)
++    return ret;
++
++  *result = (int)ret;
++  return 0;
++}
++
++int sys_tcgetattr(int fd, struct termios *attr) {
++  int ret;
++  if (int r = sys_ioctl(fd, TCGETS, attr, &ret) != 0) {
++    return r;
++  }
++  return 0;
++}
++
++int sys_tcsetattr(int fd, int optional_action, const struct termios *attr) {
++  int ret;
++  switch (optional_action) {
++  case TCSANOW:
++    optional_action = TCSETS;
++    break;
++  case TCSADRAIN:
++    optional_action = TCSETSW;
++    break;
++  case TCSAFLUSH:
++    optional_action = TCSETSF;
++    break;
++  default:
++    __ensure(!"Unsupported tcsetattr");
++  }
++
++  if (int r = sys_ioctl(fd, optional_action, (void *)attr, &ret) != 0) {
++    return r;
++  }
++
++  return 0;
++}
++
 +int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read) {
 +  uintptr_t ret = __syscall3(SYS_READ, fd, (uintptr_t)buf, count);
 +
@@ -294,6 +322,11 @@ index 0000000..c6b838b
 +int sys_tcb_set(void *pointer) {
 +  return __syscall1(SYS_TCB_SET, (uintptr_t)pointer);
 +};
++
++int sys_fsync(int) {
++  mlibc::infoLogger() << "fsync() is a stub" << frg::endlog;
++  return 0;
++}
 +
 +int sys_futex_wait(int *pointer, int expected, timespec const *time) STUB_ONLY;
 +int sys_futex_wake(int *pointer) STUB_ONLY;
@@ -644,10 +677,10 @@ index 0000000..66412d7
 \ No newline at end of file
 diff --git mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
 new file mode 100644
-index 0000000..69b64ed
+index 0000000..3a4cf1b
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/include/nyx/syscall.h
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,85 @@
 +#ifndef _NYX__SYSCALL_H
 +#define _NYX__SYSCALL_H
 +
@@ -670,6 +703,7 @@ index 0000000..69b64ed
 +  SYS_EXEC,
 +  SYS_READDIR,
 +  SYS_WAITPID,
++  SYS_IOCTL,
 +};
 +
 +static inline uintptr_t __syscall0(long sc) {
