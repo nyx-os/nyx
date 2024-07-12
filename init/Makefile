@@ -8,4 +8,4 @@ init: init.c
 .PHONY: install
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
-	install --strip-program=$(STRIP) -s init $(DESTDIR)$(PREFIX)/bin/init
+	install init $(DESTDIR)$(PREFIX)/bin

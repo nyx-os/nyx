@@ -1,11 +1,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 int main(void) {
-
   char *shell = getenv("SHELL");
 
   setenv("TERM", "linux", 1);
@@ -16,7 +16,7 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
-  printf("Welcome to \033[1;32mnyx\033[0m, your shell is %s\n", shell);
+  printf("Welcome to \033[32mnyx\033[0m, your shell is %s\n", shell);
 
   int pid = fork();
 
@@ -30,6 +30,9 @@ int main(void) {
     execvp(shell, argv);
     return EXIT_FAILURE;
   }
+
+  int status;
+  waitpid(-1, &status, 0);
 
   return 0;
 }

@@ -1,17 +1,17 @@
 name=init
-from_source=init
+version=0.0
 revision=1
+source_dir="init"
+hostdeps="gcc binutils"
 deps="core-libs"
-hostdeps="gcc"
-
-configure() {
-    cp -r ${source_dir}/. ./
-}
 
 build() {
-    make -j${parallelism} CC=x86_64-nyx-gcc
+    cp -r "${source_dir}"/. ./
+    CC=${OS_TRIPLET}-gcc make
 }
 
-install() {
-    make install DESTDIR="${dest_dir}" PREFIX="${prefix}" STRIP=x86_64-nyx-strip
+package() {
+    install -d "${dest_dir}/usr/bin"
+    install init "${dest_dir}/usr/bin/"
+    post_package_strip
 }

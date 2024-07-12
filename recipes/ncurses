@@ -1,38 +1,45 @@
 name=ncurses
-from_source=ncurses
+version=6.5.20240608
 revision=1
-imagedeps="gcc ncurses"
+tarball_url="https://github.com/ThomasDickey/ncurses-snapshots/archive/refs/tags/v6_5_20240608.tar.gz"
+tarball_blake2b="b9d3692934d66abe3507b2f8a8082591c8bfae3e93e9e638b2808129815213d5b91e2a9d17726bb6ecb081ddce9bc75d777f6e7343e7a14562c665241e1a3b29"
+source_hostdeps="autoconf automake libtool pkg-config"
+imagedeps="gcc ncurses patchelf"
 hostdeps="gcc automake autoconf libtool pkg-config"
 deps="core-libs"
 
-configure() {
-        cf_cv_func_nanosleep=yes \
-    "${source_dir}"/configure \
-        --host=x86_64-nyx \
-        --prefix="${prefix}" \
-        --sysconfdir=/etc \
-        --localstatedir=/var \
-        --enable-pc-files \
-        --with-shared \
-        --without-normal \
-        --with-manpage-format=normal \
-        --with-pkg-config-libdir=/usr/lib/pkgconfig \
-        --with-termlib \
-        --enable-widec
+regenerate() {
+    cp -pv /usr/local/share/libtool/build-aux/config.guess ./
+    cp -pv /usr/local/share/libtool/build-aux/config.sub ./
 }
 
 build() {
+        cf_cv_func_nanosleep=yes \
+    autotools_configure \
+        --enable-widec \
+        --enable-pc-files \
+        --with-shared \
+        --with-cxx-shared \
+        --without-normal \
+        --without-debug \
+        --with-manpage-format=normal \
+        --with-pkg-config-libdir=/usr/lib/pkgconfig \
+        --with-termlib \
+        --without-ada
+
     make -j${parallelism}
 }
 
-install() {
+package() {
     make install DESTDIR="${dest_dir}"
 
     # As we build ncurses with wide character support, make some compatibility links
-    for lib in ncurses form panel menu tinfo ; do
+    for lib in ncurses ncurses++ form panel menu tinfo ; do
        rm -vf                    "${dest_dir}${prefix}"/lib/lib${lib}.so
        echo "INPUT(-l${lib}w)" > "${dest_dir}${prefix}"/lib/lib${lib}.so
        ln -sfv ${lib}w.pc        "${dest_dir}${prefix}"/lib/pkgconfig/${lib}.pc
+       # Set library soname
+       patchelf --set-soname lib${lib}w.so "${dest_dir}${prefix}"/lib/lib${lib}w.so
     done
     rm -vf                     "${dest_dir}${prefix}"/lib/libcursesw.so
     echo "INPUT(-lncursesw)" > "${dest_dir}${prefix}"/lib/libcursesw.so
@@ -41,6 +48,5 @@ install() {
     # Remove static libraries
     rm -rf "${dest_dir}${prefix}"/lib/*.a
 
-    # Strip
-    x86_64-nyx-strip "${dest_dir}${prefix}"/lib/{libformw.so,libmenuw.so,libncursesw.so,libpanelw.so,libtinfow.so}
+    post_package_strip
 }

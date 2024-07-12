@@ -14,5 +14,4 @@ builds
 sysroot
 boot/*
 pkgs
-!boot/boot
 .jinx-cache

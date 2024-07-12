@@ -4,16 +4,20 @@ revision=1
 hostdeps="autoconf automake"
 imagedeps="help2man gcc"
 
-configure() {
+build() {
     cp -rp "${source_dir}"/. ./
     ./configure \
         --prefix="${prefix}"
-}
 
-build() {
     make -j${parallelism}
 }
 
-install() {
-    DESTDIR="${dest_dir}" make install-strip
+package() {
+    DESTDIR="${dest_dir}" make install
+
+    cp -pv /usr/local/share/autoconf/build-aux/config.sub "${dest_dir}${prefix}"/share/libtool/build-aux/
+    cp -pv /usr/local/share/autoconf/build-aux/config.guess "${dest_dir}${prefix}"/share/libtool/build-aux/
+
+        strip_command=strip \
+    post_package_strip
 }

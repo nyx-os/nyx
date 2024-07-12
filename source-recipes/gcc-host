@@ -1,16 +1,19 @@
 name=gcc-host
-version=13.1.0
+version=13.3.0
 tarball_url="https://ftp.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz"
-tarball_blake2b="b956a773cffe8b43bd6c9a99fe614f53f665438925a6b320975d301f547923e45d4d6fa577a143467fb03e0a9c1bab2b6719a1011d672367f3e644433a2d7606"
-hostdeps="automake autoconf libtool pkg-config"
+tarball_blake2b="0f3728b026bd8aab0e469dda54facf157a4b753d3405a74b0be6105a6e3a493d26df4007d90ae4e05d86277d41873312638f9589d1757cee80ca84de7f2099e3"
+hostdeps="automake autoconf-2.69 libtool pkg-config"
+imagedeps="git"
 allow_network="yes"
 
 regenerate() {
     ./contrib/download_prerequisites
 
-    GCC_CONFIG_PATH="$(realpath ./config)"
-    for f in $(find . -name configure.ac); do
-        ( cd $(dirname $f) && libtoolize -cfvi && autoreconf -fvi -I$GCC_CONFIG_PATH )
-    done
-    unset GCC_CONFIG_PATH
+    # Gettext causes issues and we don't want it anyways.
+    rm -rf gettext*
+
+    autotools_recursive_regen -I"$(realpath ./config)"
+
+    cp -pv /usr/local/share/libtool/build-aux/{config.sub,config.guess,install-sh} libiberty/
+    cp -pv /usr/local/share/libtool/build-aux/{config.sub,config.guess,install-sh} libgcc/
 }

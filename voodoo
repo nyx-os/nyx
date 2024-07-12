@@ -1,0 +1,135 @@
+#!/usr/bin/python3
+
+import argparse
+import urllib.request
+import os
+import os.path
+import stat
+import subprocess
+
+
+def get_var(script, varname):
+    cmd = f'echo $(source {script}; echo ${varname})'
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True, executable='/bin/bash')
+    return p.stdout.readlines()[0].strip()
+
+
+def get_vars(script):
+    dict = {}
+    for i in ['hostdeps', 'hostrundeps', 'builddeps', 'from_source', 'deps']:
+        dict[i] = get_var(script, i).decode().split(' ')
+    return dict
+
+def create_dir_if_missing(path):
+    if not os.path.isdir(path):
+        os.mkdir(path)
+
+
+def make_file_executable(path):
+    st = os.stat(path)
+    os.chmod(path, st.st_mode | stat.S_IEXEC)
+
+def new(args):
+    create_dir_if_missing(args.directory)
+    os.chdir(args.directory)
+
+    print(f"* Created new directory \033[1m{args.directory}\033[0m")
+
+    with open("jinx", "wb+") as f:
+        f.write(urllib.request.urlopen("https://raw.githubusercontent.com/mintsuki/jinx/trunk/jinx").read())
+
+    make_file_executable('jinx')
+
+    print("* Fetched jinx")
+
+    with open("jinx-config", "w+") as f:
+        f.write(f"JINX_MAJOR_VER=0.2\nOS_TRIPLET={args.target}\n")
+
+    print (f"* Wrote jinx-config (OS triplet is \033[1;35m{args.target}\033[0m)")
+
+    create_dir_if_missing("recipes")
+    create_dir_if_missing("patches")
+    create_dir_if_missing("host-recipes")
+    create_dir_if_missing("source-recipes")
+
+    print("* Created directories")
+
+    print("Initialization complete!")
+
+def fetch_internal(recipe, host=False, source=False, level=0):
+    path = f"recipes/{recipe}" if not host and not source else f"host-recipes/{recipe}" if not source else f"source-recipes/{recipe}" 
+
+    if not source:
+        with open(path, "wb+") as f:
+            f.write(urllib.request.urlopen(f"https://raw.githubusercontent.com/rdmsr/voodoo-packages/master/{path}").read())
+    else:
+        try:
+            data = urllib.request.urlopen(f"https://raw.githubusercontent.com/rdmsr/voodoo-packages/master/{path}").read()
+            with open(path, "wb+") as f:            
+                f.write(data)
+        except:
+            # If there is no source-recipe, then the source must be in an existing recipe
+            if not os.path.exists(f'recipes/{recipe}'):
+                fetch_internal(f"{recipe}", level=level+1)
+            
+            path = f'recipes/{recipe}'
+
+    vars = get_vars(path)
+
+
+    if len(vars['from_source'][0]) > 0:
+        fetch_internal(vars['from_source'][0], source=True, level=level+1)
+
+    
+    print(f"{'    ' * (level-1)}{'└──' if level != 0 else ''}{' ' if level != 0 else ''}Fetched {'host ' if host else 'source ' if source else ''}recipe {recipe}")
+
+    if len(vars['hostdeps'][0]) > 0:
+        for dep in vars['hostdeps']:
+            if not os.path.exists(f'host-recipes/{dep}'):
+                fetch_internal(f'{dep}', host=True, level=level+1)
+
+    if len(vars['hostrundeps'][0]) > 0:
+        for dep in vars['hostrundeps']:
+            if not os.path.exists(f'host-recipes/{dep}'):
+                fetch_internal(f'{dep}', host=True, level=level+1)
+
+    if len(vars['deps'][0]) > 0:
+        for dep in vars['deps']:
+            if not os.path.exists(f'recipes/{dep}'):
+                fetch_internal(f'{dep}', level=level+1)
+
+    if len(vars['builddeps'][0]) > 0:
+        for dep in vars['builddeps']:
+            if not os.path.exists(f'recipes/{dep}'):
+                fetch_internal(f'{dep}', level=level+1)
+
+def fetch(args):
+    fetch_internal(args.package)
+
+
+def fetch_host(args):
+    fetch_internal(args.package, host=True)
+
+parser = argparse.ArgumentParser(
+                    prog='voodoo',
+                    description='Package manager for Jinx recipes',
+                    epilog='')
+
+subparsers = parser.add_subparsers(required=True, help='Subcommands')
+
+parser_new = subparsers.add_parser('new', help='Create a fresh jinx environment', epilog="Not required for existing jinx environments")
+parser_new.add_argument('directory')
+parser_new.add_argument("-t", "--target", help="OS triplet");
+parser_new.set_defaults(func=new)
+
+parser_fetch = subparsers.add_parser('fetch', help='fetch a recipe')
+parser_fetch.add_argument('package')
+parser_fetch.set_defaults(func=fetch)
+
+parser_fetch_host = subparsers.add_parser('fetch-host', help='fetch a host recipe')
+parser_fetch_host.add_argument('package')
+parser_fetch_host.set_defaults(func=fetch_host)
+
+args = parser.parse_args()
+args.func(args)
+

@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/usr/bin/bash
+cp limine.cfg boot/boot/limine.cfg
 rm -rf -- boot/sysroot
 mkdir -p boot/sysroot
 ./jinx sysroot

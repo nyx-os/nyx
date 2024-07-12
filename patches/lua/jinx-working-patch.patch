@@ -20,15 +20,15 @@ index b771196..b1cf0d0 100644
  PLAT= guess
  
 -CC= gcc -std=gnu99
-+CC=x86_64-nyx-gcc -std=gnu99
++CC=x86_64-pc-nyx-mlibc-gcc -std=gnu99
  CFLAGS= -O2 -Wall -Wextra -DLUA_COMPAT_5_3 $(SYSCFLAGS) $(MYCFLAGS)
  LDFLAGS= $(SYSLDFLAGS) $(MYLDFLAGS)
  LIBS= -lm $(SYSLIBS) $(MYLIBS)
  
 -AR= ar rcu
 -RANLIB= ranlib
-+AR=x86_64-nyx-ar rcu
-+RANLIB=x86_64-nyx-ranlib
++AR=x86_64-pc-nyx-mlibc-ar rcu
++RANLIB=x86_64-pc-nyx-mlibc-ranlib
  RM= rm -f
  UNAME= uname
  

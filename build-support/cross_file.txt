@@ -1,9 +1,9 @@
 [binaries]
-c = 'x86_64-nyx-gcc'
-cpp = 'x86_64-nyx-g++'
-ar = 'x86_64-nyx-ar'
-strip = 'x86_64-nyx-strip'
-pkgconfig = 'x86_64-nyx-pkg-config'
+c = 'x86_64-pc-nyx-mlibc-gcc'
+cpp = 'x86_64-pc-nyx-mlibc-g++'
+ar = 'x86_64-pc-nyx-mlibc-ar'
+strip = 'x86_64-pc-nyx-mlibc-strip'
+pkg-config = 'x86_64-pc-nyx-mlibc-pkg-config'
 
 [host_machine]
 system = 'nyx'

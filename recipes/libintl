@@ -1,37 +1,39 @@
 name=libintl
-from_source=libintl
+from_source=gettext
 revision=1
 hostdeps="gcc automake autoconf libtool pkg-config"
-deps="mlibc libgcc libiconv"
+deps="mlibc libgcc libstdc++ libiconv"
 
-configure() {
-    ${source_dir}/configure    \
-        --host=x86_64-nyx   \
-        --prefix=${prefix}     \
-        --without-emacs        \
-        --without-lispdir      \
+build() {
+        ACLOCAL=true \
+        AUTOCONF=true \
+        AUTOMAKE=true \
+        AUTOHEADER=true \
+    autotools_configure \
+        --without-emacs \
+        --without-lispdir \
         `# Normally this controls nls behavior in general, but the libintl` \
         `# subdir is skipped unless this is explicitly set.` \
-        --enable-nls           \
+        --enable-nls \
         `# This magic flag enables libintl.` \
         --with-included-gettext \
         --disable-c++ \
         --disable-libasprintf \
         --disable-java \
-        --enable-shared \
-        --disable-static \
         --enable-threads=posix \
         --disable-curses \
         --without-git \
         --without-cvs \
         --without-bzip2 \
         --without-xz
-}
 
-build() {
+    sed -i 's/touch $@//g' gettext-runtime/intl/Makefile
+
     make -C gettext-runtime/intl -j${parallelism}
 }
 
-install() {
-    DESTDIR="${dest_dir}" make -C gettext-runtime/intl install-strip
+package() {
+    DESTDIR="${dest_dir}" make -C gettext-runtime/intl install
+
+    post_package_strip
 }

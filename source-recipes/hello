@@ -1,8 +1,0 @@
-name=hello 
-source_method=tarball
-tarball_url="https://ftp.gnu.org/gnu/hello/hello-2.12.tar.gz"
-tarball_blake2b="62a977d27c3e9a2a3d3998bf4f9b1dd8323d88a603138a80ad423d51493f9c99bed418dfc64ee55c23587d727865bf149affed6fe40b782d8ca9384346ba6414"
-
-regenerate() {
-  true
-}

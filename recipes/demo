@@ -1,0 +1,17 @@
+name=demo
+version=0.0
+revision=1
+source_dir="demo"
+hostdeps="gcc binutils"
+deps="core-libs"
+
+build() {
+    cp -r "${source_dir}"/. ./
+    CC=${OS_TRIPLET}-gcc make
+}
+
+package() {
+    install -d "${dest_dir}/usr/bin"
+    install demo "${dest_dir}/usr/bin/"
+    post_package_strip
+}
