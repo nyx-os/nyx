@@ -1,16 +1,4 @@
-[submodule "srv/olympus"]
-	path = srv/olympus
-	url = https://github.com/nyx-org/olympus
-[submodule "chadlibc"]
-	path = chadlibc
-	url = https://github.com/nyx-org/chadlibc
-[submodule "subprojects/olympus"]
-	path = subprojects/olympus
-	url = https://github.com/nyx-org/olympus
-[submodule "subprojects/gaia"]
-	path = subprojects/gaia
-	url = https://github.com/nyx-org/gaia
 [submodule "limine"]
 	path = limine
 	url = https://github.com/limine-bootloader/limine
-	branch = v4.x-branch-binary
+	branch = v7.x-binary
