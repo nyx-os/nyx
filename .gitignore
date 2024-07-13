@@ -16,3 +16,6 @@ boot/*
 pkgs
 ovmf-*
 .jinx-cache
+.cache
+subprojects/*
+!subprojects/gaia.wrap

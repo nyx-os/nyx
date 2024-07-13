@@ -1,0 +1,4 @@
+[wrap-git]
+directory = gaia 
+url = https://github.com/nyx-org/gaia.git
+revision = master
