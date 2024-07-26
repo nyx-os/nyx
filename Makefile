@@ -11,7 +11,7 @@ run: run-$(ARCH)
 
 .PHONY: run-x86_64
 run-x86_64: ovmf $(IMAGE_NAME).iso
-	qemu-system-x86_64 -M q35 -m 2G -enable-kvm -bios ovmf-x86_64/OVMF.fd -cpu host -cdrom $(IMAGE_NAME).iso -boot d -debugcon stdio -no-shutdown -no-reboot
+	qemu-system-x86_64 -M q35 -m 2G -enable-kvm -bios ovmf-x86_64/OVMF.fd -cpu host -cdrom $(IMAGE_NAME).iso -boot d -debugcon stdio -no-shutdown -no-reboot -cpu host -smp 2
 
 .PHONY: run-aarch64
 run-aarch64: ovmf $(IMAGE_NAME).iso
