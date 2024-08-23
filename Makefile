@@ -1,6 +1,7 @@
 override IMAGE_NAME := nyx
 
 HOST_CC=gcc
+SMP_CORES ?= 2
 
 .PHONY: all
 all: $(IMAGE_NAME).iso
@@ -11,7 +12,7 @@ run: run-$(ARCH)
 
 .PHONY: run-x86_64
 run-x86_64: ovmf $(IMAGE_NAME).iso
-	qemu-system-x86_64 -M q35 -m 2G -enable-kvm -bios ovmf-x86_64/OVMF.fd -cpu host -cdrom $(IMAGE_NAME).iso -boot d -debugcon stdio -no-shutdown -no-reboot -cpu host -smp 2
+	qemu-system-x86_64 -M q35 -m 2G -enable-kvm -bios ovmf-x86_64/OVMF.fd -cpu host -cdrom $(IMAGE_NAME).iso -boot d -debugcon stdio -no-shutdown -no-reboot -cpu host -smp $(SMP_CORES)
 
 .PHONY: run-aarch64
 run-aarch64: ovmf $(IMAGE_NAME).iso
