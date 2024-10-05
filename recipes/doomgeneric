@@ -1,0 +1,17 @@
+name=doomgeneric
+tarball_url="https://github.com/ozkl/doomgeneric/archive/d7b13f7cb8c88d1fa8acc2da8b9fe60966eaf951.tar.gz"
+tarball_blake2b="1856e472d8b183ccc3cef4ceb58c28d9b1e2b4d682801697c829298e4b202f7ca7b81c66c1b67992bb47dfdd66487c93de73c9e75371797b47e38c24315cc016"
+version=0.0
+revision=1
+hostdeps="gcc binutils"
+deps="core-libs"
+
+build() {
+    cp -r "${source_dir}"/doomgeneric/* .
+    CC=${OS_TRIPLET}-gcc make -j${parallelism}
+}
+
+package() {
+    mkdir -p ${dest_dir}/usr/bin
+    cp -f doomgeneric ${dest_dir}/usr/bin/doomgeneric
+}

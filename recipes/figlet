@@ -1,0 +1,15 @@
+name=figlet
+tarball_url="http://ftp.figlet.org/pub/figlet/program/unix/figlet-2.2.5.tar.gz"
+tarball_blake2b="9d7a8b518ee91bd937d7fb81d782c894bc2a1738b696b03d948c1319e68aadde9ff1ea291ee77f9e79bdd950c68fe98c9e4539e7e76ef5f9e758c16b968966e1"
+revision=1
+hostdeps="gcc binutils"
+deps="core-libs"
+
+build() {
+    cp -r "${source_dir}"/. ./  
+    make -j${parallelism} CC=${OS_TRIPLET}-gcc LD=${OS_TRIPLET}-gcc
+}
+
+package() {
+    make install DESTDIR="${dest_dir}"
+}

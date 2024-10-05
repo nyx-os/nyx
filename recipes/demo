@@ -7,7 +7,7 @@ deps="core-libs"
 
 build() {
     cp -r "${source_dir}"/. ./
-    CC=${OS_TRIPLET}-gcc make
+    CC=${OS_TRIPLET}-gcc LD=${OS_TRIPLET}-gcc make
 }
 
 package() {

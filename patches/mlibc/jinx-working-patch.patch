@@ -399,10 +399,10 @@ index 0000000..128a9e8
 +}
 diff --git mlibc-workdir/sysdeps/nyx/generic/generic.cpp mlibc-workdir/sysdeps/nyx/generic/generic.cpp
 new file mode 100644
-index 0000000..f50b104
+index 0000000..539c416
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/generic/generic.cpp
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,426 @@
 +#include <errno.h>
 +#include <fcntl.h>
 +#include <limits.h>
@@ -767,11 +767,13 @@ index 0000000..f50b104
 +}
 +
 +int sys_clock_get(int clock, time_t *secs, long *nanos) {
-+  (void)clock;
-+  (void)secs;
-+  (void)nanos;
-+  // mlibc::infoLogger() << "clock_get() is a stub" << frg::endlog;
-+  return 0;
++	struct timespec tp = {};
++	auto ret = do_syscall(SYS_clock_gettime, clock, &tp);
++	if (int e = sc_error(ret); e)
++		return e;
++	*secs = tp.tv_sec;
++	*nanos = tp.tv_nsec;
++	return 0;
 +}
 +
 +int sys_fcntl(int fd, int cmd, va_list args, int *result) {
@@ -812,6 +814,19 @@ index 0000000..f50b104
 +}
 +
 +int sys_fsync(int) { return 0; }
++
++int sys_sleep(time_t *secs, long *nanos) {
++  struct timespec req = {.tv_sec = *secs, .tv_nsec = *nanos};
++  struct timespec rem = {};
++
++  auto ret = do_cp_syscall(SYS_nanosleep, &req, &rem);
++  if (int e = sc_error(ret); e)
++    return e;
++
++  *secs = rem.tv_sec;
++  *nanos = rem.tv_nsec;
++  return 0;
++}
 +
 +} // namespace mlibc
 diff --git mlibc-workdir/sysdeps/nyx/include/abi-bits/access.h mlibc-workdir/sysdeps/nyx/include/abi-bits/access.h
