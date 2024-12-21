@@ -399,10 +399,10 @@ index 0000000..128a9e8
 +}
 diff --git mlibc-workdir/sysdeps/nyx/generic/generic.cpp mlibc-workdir/sysdeps/nyx/generic/generic.cpp
 new file mode 100644
-index 0000000..539c416
+index 0000000..c35a75d
 --- /dev/null
 +++ mlibc-workdir/sysdeps/nyx/generic/generic.cpp
-@@ -0,0 +1,426 @@
+@@ -0,0 +1,433 @@
 +#include <errno.h>
 +#include <fcntl.h>
 +#include <limits.h>
@@ -767,13 +767,13 @@ index 0000000..539c416
 +}
 +
 +int sys_clock_get(int clock, time_t *secs, long *nanos) {
-+	struct timespec tp = {};
-+	auto ret = do_syscall(SYS_clock_gettime, clock, &tp);
-+	if (int e = sc_error(ret); e)
-+		return e;
-+	*secs = tp.tv_sec;
-+	*nanos = tp.tv_nsec;
-+	return 0;
++  struct timespec tp = {};
++  auto ret = do_syscall(SYS_clock_gettime, clock, &tp);
++  if (int e = sc_error(ret); e)
++    return e;
++  *secs = tp.tv_sec;
++  *nanos = tp.tv_nsec;
++  return 0;
 +}
 +
 +int sys_fcntl(int fd, int cmd, va_list args, int *result) {
@@ -825,6 +825,13 @@ index 0000000..539c416
 +
 +  *secs = rem.tv_sec;
 +  *nanos = rem.tv_nsec;
++  return 0;
++}
++
++int sys_uname(struct utsname *buf) {
++  auto ret = do_syscall(SYS_uname, buf);
++  if (int e = sc_error(ret); e)
++    return e;
 +  return 0;
 +}
 +

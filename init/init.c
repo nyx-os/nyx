@@ -2,8 +2,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
+
+const char *motds[] = {"Welcome to the NYX Operating System",
+                       "Welcome to the Machine",
+                       "It's a UNIX system, I know this!"};
+const int margin = 50;
 
 int main(void) {
   char *shell = getenv("SHELL");
@@ -16,7 +23,21 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
-  printf("Welcome to \033[32mnyx\033[0m, your shell is %s\n", shell);
+  time_t rawtime;
+  char timebuf[80];
+  struct tm *timeinfo;
+
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
+
+  strftime(timebuf, 80, "%a %b %d %H:%M:%S", timeinfo);
+
+  srand(rawtime);
+  printf("%s\n", motds[rand() % 2]);
+  printf("Date/Time: %s\n", timebuf);
+  printf("Launching shell %s\n", shell);
+
+  puts("");
 
   int pid = fork();
 
